@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convert to WebP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --white: #ffffff;
+    --black: #1d1d1f;
+    --gray1: #f5f5f7;
+    --gray2: #e8e8ed;
+    --gray3: #d2d2d7;
+    --gray4: #86868b;
+    --gray5: #515154;
+    --success-bg: #f0f0f0;
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--gray1);
+    color: var(--black);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 64px 24px 80px;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray4);
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    color: var(--black);
+    margin-bottom: 12px;
+  }
+
+  h1 .fmt-from { color: var(--gray4); }
+  h1 .arrow { color: var(--gray3); margin: 0 10px; font-weight: 300; }
+  h1 .fmt-to { color: var(--black); }
+
+  .subtitle {
+    font-size: 15px;
+    color: var(--gray4);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* ── Card shell ── */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 24px;
+    margin-bottom: 12px;
+  }
+
+  /* ── Quality panel ── */
+  .quality-panel {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .quality-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray5);
+    white-space: nowrap;
+    min-width: 60px;
+  }
+
+  .quality-slider-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--gray2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--black);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+
+  input[type=range]::-webkit-slider-thumb:active {
+    transform: scale(1.15);
+  }
+
+  .quality-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--black);
+    min-width: 32px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Drop zone ── */
+  .drop-zone {
+    border: 1.5px dashed var(--gray3);
+    border-radius: var(--radius-md);
+    padding: 52px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: transparent;
+  }
+
+  .drop-zone:hover {
+    border-color: var(--gray4);
+    background: var(--gray1);
+  }
+
+  .drop-zone.drag-over {
+    border-color: var(--black);
+    background: var(--gray2);
+  }
+
+  .drop-icon {
+    display: block;
+    margin: 0 auto 16px;
+    width: 48px; height: 48px;
+    transition: transform 0.25s ease;
+  }
+
+  .drop-zone:hover .drop-icon,
+  .drop-zone.drag-over .drop-icon {
+    transform: translateY(-3px);
+  }
+
+  .drop-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--black);
+    margin-bottom: 6px;
+  }
+
+  .drop-sub {
+    font-size: 13px;
+    color: var(--gray4);
+    margin-bottom: 20px;
+  }
+
+  .browse-btn {
+    display: inline-block;
+    padding: 9px 22px;
+    background: var(--black);
+    color: #fff;
+    border: none;
+    border-radius: 980px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .browse-btn:hover { opacity: 0.8; }
+
+  #file-input { display: none; }
+
+  /* ── Actions ── */
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 980px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  .btn-primary {
+    background: var(--black);
+    color: #fff;
+  }
+  .btn-primary:hover { opacity: 0.82; }
+
+  .btn-ghost {
+    background: var(--gray2);
+    color: var(--black);
+  }
+  .btn-ghost:hover { background: var(--gray3); }
+
+  .btn-zip {
+    background: var(--gray2);
+    color: var(--black);
+  }
+  .btn-zip:not(:disabled):hover { background: var(--gray3); }
+
+  /* ── Progress ── */
+  .progress-wrap { display: none; }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--gray4);
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--gray2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--black);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* ── Summary ── */
+  .summary {
+    display: none;
+    gap: 0;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--gray2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .summary-item {
+    background: var(--white);
+    padding: 18px 16px;
+    text-align: center;
+  }
+
+  .summary-item span {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--black);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-item .sum-label {
+    font-size: 11px;
+    color: var(--gray4);
+    font-weight: 400;
+    display: block;
+    font-size: 11px;
+  }
+
+  /* ── File cards ── */
+  .file-list { display: flex; flex-direction: column; gap: 1px; }
+
+  .file-list-wrap {
+    background: var(--gray2);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+  }
+
+  .file-card {
+    background: var(--white);
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    animation: fadeUp 0.25s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .thumb-wrap {
+    width: 48px; height: 48px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--gray1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.4rem;
+  }
+
+  .thumb-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  .file-info { min-width: 0; }
+
+  .file-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 5px;
+  }
+
+  .file-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .meta-chip {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .chip-original  { background: var(--gray1); color: var(--gray4); }
+  .chip-converted { background: var(--gray1); color: var(--gray5); }
+  .chip-savings   { background: var(--gray2); color: var(--black); font-weight: 600; }
+  .chip-error     { background: #fff0f0; color: #c0392b; }
+
+  .meta-status {
+    font-size: 11px;
+    color: var(--gray4);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-pending    { background: var(--gray3); }
+  .dot-converting { background: #f5a623; animation: pulse 1s infinite; }
+  .dot-done       { background: #34c759; }
+  .dot-error      { background: #ff3b30; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Download link styled as pill */
+  a.btn-dl {
+    display: inline-block;
+    padding: 7px 14px;
+    background: var(--gray1);
+    border: 1px solid var(--gray2);
+    border-radius: 980px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--black);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+  }
+
+  a.btn-dl:hover {
+    background: var(--gray2);
+    border-color: var(--gray3);
+  }
+
+  /* Section dividers */
+  .section { margin-bottom: 12px; }
+
+  /* Responsive */
+  @media (max-width: 580px) {
+    .container { padding: 40px 16px 60px; }
+    .file-card { grid-template-columns: 40px 1fr; }
+    .file-actions { grid-column: 1/-1; justify-content: flex-end; display: flex; }
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .actions { flex-direction: column; }
+    .btn { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <p class="eyebrow">Image Converter</p>
+    <h1>
+      <span class="fmt-from">PNG</span>
+      <span class="arrow">→</span>
+      <span class="fmt-to">WebP</span>
+    </h1>
+    <p class="subtitle">批量转换，本地处理，文件不离开你的设备</p>
+  </header>
+
+  <!-- Quality -->
+  <div class="card section">
+    <div class="quality-panel">
+      <span class="quality-label">输出质量</span>
+      <div class="quality-slider-wrap">
+        <input type="range" id="quality-slider" min="1" max="100" value="85">
+        <span class="quality-value" id="quality-display">85</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="card section" style="padding:0;overflow:hidden;">
+    <div class="drop-zone" id="drop-zone">
+      <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="10" width="36" height="28" rx="4" stroke="#86868b" stroke-width="1.8"/>
+        <path d="M6 32l9-9 7 7 6-6 8 8" stroke="#86868b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="33" cy="20" r="3" fill="#86868b"/>
+        <path d="M24 6v10M20 10l4-4 4 4" stroke="#1d1d1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="drop-title">拖拽图片到此处</div>
+      <div class="drop-sub">支持 PNG、JPG、JPEG、GIF、BMP 等格式</div>
+      <button class="browse-btn" onclick="document.getElementById('file-input').click()">选择文件</button>
+      <input type="file" id="file-input" multiple accept="image/*">
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="section actions" id="actions-bar" style="display:none;">
+    <button class="btn btn-primary" id="btn-convert">转换</button>
+    <button class="btn btn-zip" id="btn-zip" disabled>打包下载 ZIP</button>
+    <button class="btn btn-ghost" id="btn-add" onclick="document.getElementById('file-input').click()">添加更多</button>
+    <button class="btn btn-ghost" id="btn-clear">清空</button>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap section" id="progress-wrap">
+    <div class="progress-header">
+      <span>正在转换</span>
+      <span id="progress-count">0 / 0</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary section card" id="summary" style="padding:0;overflow:hidden;">
+    <div class="summary-grid">
+      <div class="summary-item">
+        <span id="sum-total">0</span>
+        <span class="sum-label">文件数</span>
+      </div>
+      <div class="summary-item">
+        <span id="sum-original">—</span>
+        <span class="sum-label">原始大小</span>
+      </div>
+      <div class="summary-item">
+        <span id="sum-converted">—</span>
+        <span class="sum-label">转换后</span>
+      </div>
+      <div class="summary-item">
+        <span id="sum-saved">—</span>
+        <span class="sum-label">压缩率</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- File list -->
+  <div class="file-list-wrap section" id="file-list-wrap" style="display:none;">
+    <div class="file-list" id="file-list"></div>
+  </div>
+
+</div>
+
+
+</body>
+</html>
